@@ -5,6 +5,7 @@ const main = document.querySelector("main");
 const storageKey = "aula-dele-a2-v1";
 let state = { done: [], drafts: {}, last: "1.1", scores: {} };
 let saveError = false;
+
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
   if (saved && typeof saved === "object") {
@@ -13,10 +14,27 @@ try {
     state.scores = saved.scores && typeof saved.scores === "object" ? saved.scores : {};
     state.last = typeof saved.last === "string" ? saved.last : "1.1";
   }
-} catch { saveError = true; }
+} catch {
+  saveError = true;
+}
+
 let clock = null;
 let remaining = 180;
 let deadline = 0;
+let voicesLoaded = false;
+let availableVoices = [];
+
+function loadVoices() {
+  if ("speechSynthesis" in window) {
+    availableVoices = window.speechSynthesis.getVoices();
+    if (availableVoices.length > 0) voicesLoaded = true;
+  }
+}
+loadVoices();
+if ("speechSynthesis" in window && window.speechSynthesis.onvoiceschanged !== undefined) {
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
+
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const tasks = course.topics.flatMap(topic => topic.items.map(task => ({ ...task, topic })));
 const taskById = id => tasks.find(task => task.id === id);
@@ -24,16 +42,36 @@ const pageImage = page => "paginas/p-" + String(page).padStart(3, "0") + ".jpg";
 const link = (href, label, secondary = false) => '<a class="button' + (secondary ? ' secondary' : '') + '" href="' + href + '">' + escapeHtml(label) + '</a>';
 const intro = (eyebrow, title, subtitle = "") => '<div class="intro"><span class="eyebrow">' + escapeHtml(eyebrow) + '</span><h1>' + escapeHtml(title) + '</h1><p>' + escapeHtml(subtitle) + '</p></div>';
 
+function preloadNeighbors(page, min = 1, max = 122) {
+  [page - 1, page + 1].forEach(p => {
+    if (p >= min && p <= max) {
+      const img = new Image();
+      img.src = pageImage(p);
+    }
+  });
+}
+
 function persist() {
-  try { localStorage.setItem(storageKey, JSON.stringify(state)); saveError = false; }
-  catch { saveError = true; }
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    saveError = false;
+  } catch {
+    saveError = true;
+  }
   document.querySelectorAll("[data-save-status]").forEach(el => {
     el.textContent = saveError ? "El navegador no ha podido guardar. Descarga tu trabajo antes de salir." : "Guardado en este navegador.";
   });
 }
 
 function cards() {
-  return '<div class="grid">' + course.topics.map((topic, index) => '<article class="card"><span class="symbol" aria-hidden="true">' + ["Aa", "♪", "✎", "…"][index] + '</span><h3>' + topic.short + '</h3><p>' + topic.summary + '</p><a href="#area/' + topic.id + '">Empezar a ' + topic.short.toLowerCase() + '</a></article>').join("") + '</div>';
+  return '<div class="grid">' + course.topics.map((topic, index) => 
+    '<article class="card"><span class="symbol" aria-hidden="true">' + 
+    ["Aa", "♪", "✎", "…"][index] + '</span><h3>' + 
+    escapeHtml(topic.short) + '</h3><p>' + 
+    escapeHtml(topic.summary) + '</p><a href="#area/' + 
+    encodeURIComponent(topic.id) + '">Empezar a ' + 
+    escapeHtml(topic.short.toLowerCase()) + '</a></article>'
+  ).join("") + '</div>';
 }
 
 function home() {
@@ -42,11 +80,23 @@ function home() {
 }
 
 function area(topic) {
-  return intro("Practicar español", topic.title, topic.summary) + navigation(topic.id) + '<section class="panel"><h2>Las tareas de esta destreza</h2>' + topic.items.map(task => '<article class="task row"><div><h3>' + task.title + '</h3><p>' + task.help + '</p><span class="meta">Tarea ' + task.id + ' · Páginas ' + task.start + '–' + task.end + (state.done.includes(task.id) ? ' · Practicada ✓' : '') + '</span></div>' + link("#tarea/" + task.id, "Practicar →") + '</article>').join("") + '</section>' + (topic.id === "escuchar" ? audioLinks() : "") + '<p class="meta">Puedes consultar las instrucciones y la estructura del examen en la guía del Instituto Cervantes al pie de la página.</p>';
+  return intro("Practicar español", topic.title, topic.summary) + navigation(topic.id) + 
+    '<section class="panel"><h2>Las tareas de esta destreza</h2>' + 
+    topic.items.map(task => 
+      '<article class="task row"><div><h3>' + escapeHtml(task.title) + '</h3><p>' + 
+      escapeHtml(task.help) + '</p><span class="meta">Tarea ' + escapeHtml(task.id) + ' · Páginas ' + 
+      task.start + '–' + task.end + (state.done.includes(task.id) ? ' · Practicada ✓' : '') + 
+      '</span></div>' + link("#tarea/" + task.id, "Practicar →") + '</article>'
+    ).join("") + '</section>' + 
+    (topic.id === "escuchar" ? audioLinks() : "") + 
+    '<p class="meta">Puedes consultar las instrucciones y la estructura del examen en la guía del Instituto Cervantes al pie de la página.</p>';
 }
 
 function navigation(active) {
-  return '<nav class="module-nav" aria-label="Destrezas">' + course.topics.map(topic => '<a href="#area/' + topic.id + '"' + (active === topic.id ? ' aria-current="page"' : '') + '>' + topic.short + '</a>').join("") + '</nav>';
+  return '<nav class="module-nav" aria-label="Destrezas">' + course.topics.map(topic => 
+    '<a href="#area/' + encodeURIComponent(topic.id) + '"' + (active === topic.id ? ' aria-current="page"' : '') + '>' + 
+    escapeHtml(topic.short) + '</a>'
+  ).join("") + '</nav>';
 }
 
 function viewer(page, start = 1, end = 122, route = "manual") {
@@ -54,7 +104,13 @@ function viewer(page, start = 1, end = 122, route = "manual") {
 }
 
 function manual(page) {
-  return intro("Tu material de clase", "Manual del curso", "Consulta cualquier página o entra directamente en una tarea.") + '<div class="manual-layout"><aside class="panel"><h2>Índice del manual</h2><a href="#manual/1">Presentación</a>' + course.topics.map(topic => '<h3>' + topic.short + '</h3>' + topic.items.map(task => '<a href="#manual/' + task.start + '">' + task.id + ' · ' + task.title + '</a>').join("")).join("") + '<a href="#manual/93">Refuerzo</a></aside><div>' + viewer(page) + '</div></div>';
+  return intro("Tu material de clase", "Manual del curso", "Consulta cualquier página o entra directamente en una tarea.") + 
+    '<div class="manual-layout"><aside class="panel"><h2>Índice del manual</h2><a href="#manual/1">Presentación</a>' + 
+    course.topics.map(topic => 
+      '<h3>' + escapeHtml(topic.short) + '</h3>' + 
+      topic.items.map(task => '<a href="#manual/' + task.start + '">' + escapeHtml(task.id) + ' · ' + escapeHtml(task.title) + '</a>').join("")
+    ).join("") + 
+    '<a href="#manual/93">Refuerzo</a></aside><div>' + viewer(page) + '</div></div>';
 }
 
 function quizForm(quiz) {
@@ -132,12 +188,23 @@ function render() {
   if (route === "contenido") { main.focus({ preventScroll: false }); return; }
   const task = taskById(id);
   const topic = course.topics.find(topic => topic.id === id);
-  if (route === "manual") main.innerHTML = manual(Math.max(1, Math.min(122, Math.trunc(Number(id)) || 1)));
-  else if (route === "area" && topic) main.innerHTML = area(topic);
-  else if (route === "tarea" && task) main.innerHTML = taskView(task, page);
-  else if (route === "practicar") main.innerHTML = intro("Practicar español", "Cuatro formas de avanzar", "Elige una destreza para ver sus tareas.") + cards();
-  else if (route === "ayuda") main.innerHTML = help();
-  else main.innerHTML = home();
+  if (route === "manual") {
+    const pageNum = Math.max(1, Math.min(122, Math.trunc(Number(id)) || 1));
+    main.innerHTML = manual(pageNum);
+    preloadNeighbors(pageNum, 1, 122);
+  } else if (route === "area" && topic) {
+    main.innerHTML = area(topic);
+  } else if (route === "tarea" && task) {
+    const taskPage = Math.max(task.start, Math.min(task.end, Math.trunc(Number(page)) || task.start));
+    main.innerHTML = taskView(task, page);
+    preloadNeighbors(taskPage, task.start, task.end);
+  } else if (route === "practicar") {
+    main.innerHTML = intro("Practicar español", "Cuatro formas de avanzar", "Elige una destreza para ver sus tareas.") + cards();
+  } else if (route === "ayuda") {
+    main.innerHTML = help();
+  } else {
+    main.innerHTML = home();
+  }
   document.querySelectorAll(".bar nav a").forEach(a => {
     a.removeAttribute("aria-current");
     const match = a.hash.slice(1).split("/")[0];
@@ -223,22 +290,36 @@ main.addEventListener("click", event => {
   }
   if (action === "download-draft") {
     const field = document.querySelector("[data-draft]");
-    download("Aula-A2-" + field.dataset.draft + ".txt", "Aula DELE A2\n" + main.querySelector("h1").textContent + "\nEjercicio " + field.dataset.draft + "\n\n" + field.value);
+    if (!field) return;
+    const taskTitle = main.querySelector("h1")?.textContent || "DELE A2";
+    const content = "Aula DELE A2 · Apoyo al curso\n" + taskTitle + "\nEjercicio: " + field.dataset.draft + "\nFecha: " + new Date().toLocaleDateString("es-ES") + "\n\n" + (field.value || "(Sin texto escrito aún)");
+    download("Aula-A2-" + field.dataset.draft + ".txt", content);
   }
-  if (action === "export") download("Aula-A2-mis-notas.txt", "Aula DELE A2 · Mis notas\n\n" + Object.entries(state.drafts).map(([id, text]) => id + "\n" + text).join("\n\n") + "\n\nTareas practicadas: " + state.done.join(", "));
+  if (action === "export") {
+    const dateStr = new Date().toLocaleDateString("es-ES");
+    const notes = Object.entries(state.drafts).filter(([, text]) => text && text.trim().length > 0);
+    const notesContent = notes.length 
+      ? notes.map(([id, text]) => "=== Ejercicio / Borrador: " + id + " ===\n" + text).join("\n\n")
+      : "No tienes notas guardadas todavía.";
+    const report = "Aula DELE A2 · Resumen de notas y progreso\nFecha: " + dateStr + "\n\n" +
+      "Progreso: " + state.done.length + " de 13 tareas practicadas (" + (state.done.join(", ") || "ninguna") + ")\n\n" +
+      "--- TUS NOTAS Y BORRADORES ---\n\n" + notesContent;
+    download("Aula-A2-mis-notas.txt", report);
+  }
   if (action === "speak") {
     const status = document.querySelector("#speech-status");
     if (!("speechSynthesis" in window)) { status.textContent = "Tu navegador no ofrece lectura en voz alta. Puedes usar la transcripción."; return; }
-    speechSynthesis.cancel();
+    window.speechSynthesis.cancel();
     const speech = new SpeechSynthesisUtterance(course.quiz[1].audio);
     speech.lang = "es-ES";
-    speech.rate = Number(document.querySelector("#speed").value);
-    const voice = speechSynthesis.getVoices().find(voice => voice.lang.startsWith("es"));
-    if (voice) speech.voice = voice;
+    speech.rate = Number(document.querySelector("#speed")?.value || 1);
+    const voices = availableVoices.length ? availableVoices : window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(v => v.lang.startsWith("es-ES")) || voices.find(v => v.lang.startsWith("es")) || voices[0];
+    if (spanishVoice) speech.voice = spanishVoice;
     speech.onend = () => { status.textContent = "Mensaje terminado. Puedes escucharlo otra vez."; };
     speech.onerror = () => { status.textContent = "No se ha podido reproducir la voz. Abre la transcripción o prueba otro navegador."; };
-    status.textContent = "Reproduciendo el mensaje.";
-    speechSynthesis.speak(speech);
+    status.textContent = "Reproduciendo el mensaje...";
+    window.speechSynthesis.speak(speech);
   }
   if (action === "stop-speech") { window.speechSynthesis?.cancel(); document.querySelector("#speech-status").textContent = "Reproducción detenida."; }
   if (action === "timer-start" && !clock && remaining > 0) {
@@ -255,4 +336,14 @@ main.addEventListener("click", event => {
 });
 window.addEventListener("hashchange", render);
 window.addEventListener("pagehide", () => { window.speechSynthesis?.cancel(); clearInterval(clock); });
+window.addEventListener("keydown", event => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+  if (event.key === "ArrowLeft") {
+    const prevLink = document.querySelector('.toolbar a[href*="Anterior"], .toolbar a:first-child');
+    if (prevLink) prevLink.click();
+  } else if (event.key === "ArrowRight") {
+    const nextLink = document.querySelector('.toolbar a[href*="Siguiente"], .toolbar a:nth-of-type(2)');
+    if (nextLink) nextLink.click();
+  }
+});
 render();
