@@ -3,7 +3,7 @@
 const course = window.COURSE;
 const main = document.querySelector("main");
 const storageKey = "aula-dele-a2-v1";
-let state = { done: [], drafts: {}, last: "1.1", scores: {} };
+let state = { done: [], drafts: {}, last: "1.1", scores: {}, checks: {} };
 let saveError = false;
 
 try {
@@ -12,6 +12,7 @@ try {
     state.done = Array.isArray(saved.done) ? saved.done.filter(x => typeof x === "string") : [];
     state.drafts = saved.drafts && typeof saved.drafts === "object" ? saved.drafts : {};
     state.scores = saved.scores && typeof saved.scores === "object" ? saved.scores : {};
+    state.checks = saved.checks && typeof saved.checks === "object" ? saved.checks : {};
     state.last = typeof saved.last === "string" ? saved.last : "1.1";
   }
 } catch {
@@ -100,7 +101,7 @@ function navigation(active) {
 }
 
 function viewer(page, start = 1, end = 122, route = "manual") {
-  return '<section class="panel"><div class="toolbar">' + link("#" + route + "/" + Math.max(start, page - 1), "← Anterior", true) + '<form data-page-form data-route="' + route + '" data-start="' + start + '" data-end="' + end + '"><label>Página <input class="field" aria-label="Número de página" name="page" type="number" required min="' + start + '" max="' + end + '" value="' + page + '"></label> <button class="button secondary">Ir</button></form><span class="meta">de ' + end + '</span>' + link("#" + route + "/" + Math.min(end, page + 1), "Siguiente →", true) + '<button class="button secondary" data-action="zoom" aria-pressed="false">Ampliar imagen</button></div><div class="viewer"><img src="' + pageImage(page) + '" alt="Página ' + page + ' del manual original DELE A2. Textos y fotografías en su disposición original."></div><div class="row"><a href="manual.pdf#page=' + page + '" target="_blank" rel="noopener">Abrir esta página en el PDF ↗</a><a href="manual.pdf" download="Manual-DELE-A2.pdf">Descargar manual PDF</a></div><details><summary>Texto de apoyo · página ' + page + '</summary><p class="meta">La extracción puede omitir tablas o texto dentro de imágenes. Consulta la página original para el ejercicio completo.</p><div class="prose">' + escapeHtml(course.pages[page]?.replace(/^#{1,4}\s*/gm, "") || "Esta página contiene material visual. Consulta la imagen o el PDF.") + '</div></details></section>';
+  return '<section class="panel"><div class="toolbar"><a class="button secondary" data-nav="prev" href="#' + route + '/' + Math.max(start, page - 1) + '">← Anterior</a><form data-page-form data-route="' + route + '" data-start="' + start + '" data-end="' + end + '"><label>Página <input class="field" aria-label="Número de página" name="page" type="number" required min="' + start + '" max="' + end + '" value="' + page + '"></label> <button class="button secondary">Ir</button></form><span class="meta">de ' + end + '</span>' + '<a class="button secondary" data-nav="next" href="#' + route + '/' + Math.min(end, page + 1) + '">Siguiente →</a><button class="button secondary" data-action="zoom" aria-pressed="false">Ampliar imagen</button></div><div class="viewer"><img src="' + pageImage(page) + '" decoding="async" alt="Página ' + page + ' del manual original DELE A2. Textos y fotografías en su disposición original."></div><div class="row"><a href="manual.pdf#page=' + page + '" target="_blank" rel="noopener">Abrir esta página en el PDF ↗</a><a href="manual.pdf" download="Manual-DELE-A2.pdf">Descargar manual PDF</a></div><details><summary>Texto de apoyo · página ' + page + '</summary><p class="meta">La extracción puede omitir tablas o texto dentro de imágenes. Consulta la página original para el ejercicio completo.</p><div class="prose">' + escapeHtml(course.pages[page]?.replace(/^#{1,4}\s*/gm, "") || "Esta página contiene material visual. Consulta la imagen o el PDF.") + '</div></details></section>';
 }
 
 function manual(page) {
@@ -140,7 +141,7 @@ function taskView(task, requestedPage) {
   if (task.topic.id === "escribir") {
     const choice = task.id === "3.1" ? '<section class="panel"><h2>Elige un mensaje</h2><label for="writing-choice">Ejercicio del manual</label><select id="writing-choice" class="wide">' + course.writes.map(write => '<option value="' + write.id + '">' + escapeHtml(write.title) + '</option>').join("") + '</select><div id="writing-prompt" class="prose"></div></section>' : '<p class="meta">Elige una de las opciones de la página del manual y copia la consigna en tus notas si lo necesitas.</p>';
     practice += choice + editor(task.id === "3.1" ? course.writes[0].id : "3.2-p" + page, "Tu borrador", task.id === "3.1" ? 60 : 70, task.id === "3.1" ? 70 : 80);
-    practice += '<section class="panel"><h2>Antes de terminar</h2>' + ["He respondido a todos los puntos de la consigna.", "He conectado mis ideas y revisado los verbos.", "He revisado las palabras y la ortografía."].map(text => '<label class="option"><input type="checkbox"> ' + text + '</label>').join("") + '<p class="meta">La persona docente puede ayudarte a revisar tu texto.</p></section>';
+    practice += '<section class="panel"><h2>Antes de terminar</h2>' + ["He respondido a todos los puntos de la consigna.", "He conectado mis ideas y revisado los verbos.", "He revisado las palabras y la ortografía."].map((text, i) => '<label class="option"><input type="checkbox" data-check="' + task.id + '-' + i + '"' + (state.checks[task.id + "-" + i] ? ' checked' : '') + '> ' + text + '</label>').join("") + '<p class="meta">La persona docente puede ayudarte a revisar tu texto.</p></section>';
   } else {
     if (task.topic.id === "hablar") {
       practice += timer() + '<section class="panel"><h2>Una ayuda para empezar</h2><p>' + (task.id === "4.2" ? 'En la imagen veo… · Están en… · Una persona está… · Creo que se siente…' : task.id === "4.3" ? '¿Te gustaría…? · Podemos quedar… · ¿Qué te parece…? · Prefiero… porque…' : 'Voy a hablar de… · Primero… · Después… · Lo que más me gustó fue…') + '</p></section>';
@@ -237,6 +238,10 @@ main.addEventListener("input", event => {
   wordCount();
 });
 main.addEventListener("change", event => {
+  if (event.target.matches("[data-check]")) {
+    state.checks[event.target.dataset.check] = event.target.checked;
+    persist();
+  }
   if (event.target.id === "writing-choice") writingChoice(true);
   if (event.target.id === "duration") {
     clearInterval(clock);
@@ -336,14 +341,15 @@ main.addEventListener("click", event => {
 });
 window.addEventListener("hashchange", render);
 window.addEventListener("pagehide", () => { window.speechSynthesis?.cancel(); clearInterval(clock); });
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 window.addEventListener("keydown", event => {
   if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
-  if (event.key === "ArrowLeft") {
-    const prevLink = document.querySelector('.toolbar a[href*="Anterior"], .toolbar a:first-child');
-    if (prevLink) prevLink.click();
-  } else if (event.key === "ArrowRight") {
-    const nextLink = document.querySelector('.toolbar a[href*="Siguiente"], .toolbar a:nth-of-type(2)');
-    if (nextLink) nextLink.click();
-  }
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const dir = event.key === "ArrowLeft" ? "prev" : event.key === "ArrowRight" ? "next" : null;
+  if (!dir) return;
+  const nav = document.querySelector('[data-nav="' + dir + '"]');
+  if (nav) { event.preventDefault(); nav.click(); }
 });
 render();

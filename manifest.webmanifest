@@ -1,0 +1,13 @@
+{
+  "name": "Aula DELE A2 · Español paso a paso",
+  "short_name": "Aula DELE A2",
+  "lang": "es",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f7f2",
+  "theme_color": "#103c35",
+  "icons": [
+    { "src": "marca/la-casa-grande-cuadrado.png", "sizes": "2048x2048", "type": "image/png", "purpose": "any" }
+  ]
+}
